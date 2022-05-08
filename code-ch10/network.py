@@ -1,3 +1,5 @@
+from base64 import encode
+from msilib.schema import Error
 import socket
 import time
 
@@ -9,6 +11,7 @@ from block import Block
 from helper import (
     hash256,
     encode_varint,
+    int_to_big_endian,
     int_to_little_endian,
     little_endian_to_int,
     read_varint,
@@ -52,12 +55,25 @@ class NetworkEnvelope:
             raise RuntimeError('magic is not right {} vs {}'.format(magic.hex(), expected_magic.hex()))
         # command 12 bytes
         # strip the trailing 0's
+        cmd = s.read(12)
+        cmd = cmd.rstrip(b'\x00')
+
         # payload length 4 bytes, little endian
+        length = little_endian_to_int(s.read(4))
+
         # checksum 4 bytes, first four of hash256 of payload
+        checksum = s.read(4)
+
         # payload is of length payload_length
+        payload = s.read(length)
+
         # verify checksum
+        if checksum != hash256(payload)[:4]:
+            raise IOError("Invalid checsum!")
+
         # return an instance of the class
-        raise NotImplementedError
+        # raise NotImplementedError
+        return cls(cmd, payload, testnet=testnet)
 
     def serialize(self):
         '''Returns the byte serialization of the entire network message'''
@@ -67,7 +83,15 @@ class NetworkEnvelope:
         # payload length 4 bytes, little endian
         # checksum 4 bytes, first four of hash256 of payload
         # payload
-        raise NotImplementedError
+        # raise NotImplementedError
+        msg = self.magic
+        cmd = self.command + b'\x00' * (12 - len(self.command))
+        msg += cmd
+        msg += int_to_little_endian(len(self.payload), 4)
+        checksum = hash256(self.payload)[:4]
+        msg += checksum
+        msg += self.payload
+        return msg
 
     def stream(self):
         '''Returns a stream for parsing the payload'''
@@ -134,20 +158,55 @@ class VersionMessage:
     def serialize(self):
         '''Serialize this message to send over the network'''
         # version is 4 bytes little endian
-        # services is 8 bytes little endian
-        # timestamp is 8 bytes little endian
-        # receiver services is 8 bytes little endian
-        # IPV4 is 10 00 bytes and 2 ff bytes then receiver ip
-        # receiver port is 2 bytes, big endian
-        # sender services is 8 bytes little endian
-        # IPV4 is 10 00 bytes and 2 ff bytes then sender ip
-        # sender port is 2 bytes, big endian
-        # nonce should be 8 bytes
-        # useragent is a variable string, so varint first
-        # latest block is 4 bytes little endian
-        # relay is 00 if false, 01 if true
-        raise NotImplementedError
+        result = int_to_little_endian(self.version, 4)
 
+        # services is 8 bytes little endian
+        result += int_to_little_endian(self.services, 8)
+
+        # timestamp is 8 bytes little endian
+        result += int_to_little_endian(self.timestamp, 8)
+
+        # receiver services is 8 bytes little endian
+        result += int_to_little_endian(self.receiver_services, 8)
+
+        # IPV4 is 10 00 bytes and 2 ff bytes then receiver ip
+        ipv4_rece = b'\x00' * 10 + b'\xff\xff' + self.receiver_ip
+        result += ipv4_rece
+
+        # receiver port is 2 bytes, big endian
+        #result += int_to_big_endian(self.receiver_port, 2)
+        result += int_to_big_endian(self.receiver_port, 2)
+
+        # sender services is 8 bytes little endian
+        result += int_to_little_endian(self.sender_services, 8)
+
+        # IPV4 is 10 00 bytes and 2 ff bytes then sender ip
+        ipv4_send = b'\x00' * 10 + b'\xff\xff' + self.sender_ip
+        result += ipv4_send
+
+        # sender port is 2 bytes, big endian
+        # result += int_to_big_endian(self.sender_port, 2)
+        result += int_to_big_endian(self.sender_port, 2)
+
+        # nonce should be 8 bytes
+        if len(self.nonce) != 8:
+            raise ValueError("Invalid nonce value. Should be 8 bytes!")
+        result += self.nonce
+
+        # useragent is a variable string, so varint first
+        result += encode_varint(len(self.user_agent))
+        result += self.user_agent
+
+        # latest block is 4 bytes little endian
+        result += int_to_little_endian(self.latest_block, 4)
+
+        # relay is 00 if false, 01 if true
+        if self.relay:
+            result += b'\x01'
+        else:
+            result += b'\x00'
+        # raise NotImplementedError
+        return result
 
 class VersionMessageTest(TestCase):
 

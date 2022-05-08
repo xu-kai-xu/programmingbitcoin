@@ -716,7 +716,41 @@ def op_checkmultisig(stack, z):
                 # we check if this signature goes with the current point
         # the signatures are valid, so push a 1 to the stack
         # tag::source1[]
-        raise NotImplementedError  # <3>
+        # raise NotImplementedError  # <3>
+        points = [S256Point.parse(sec) for sec in sec_pubkeys]
+        sigs = [Signature.parse(der) for der in der_signatures]
+        # for sig in sigs:
+        #     if len(points) == 0:
+        #         return False
+        #     while points:
+        #         point = points.pop(0)
+        #         if point.verify(z, sig):
+        #             break
+        # stack.append(encode_num(1))
+
+        # realization 1
+        # for sig in sigs:
+        #     results = []
+        #     for point in points:
+        #         if point.verify(z, sig):
+        #             results.append(True)
+        #         else:
+        #             results.append(False)
+        #     if True not in results:
+        #         return False
+
+        # realization 2
+        points_tmp = points[:]
+        for sig in sigs:
+            if len(points_tmp) == 0:
+                return False
+            while points_tmp:
+                point = points_tmp.pop(0)
+                if point.verify(z, sig):
+                    points_tmp = points[:]
+                    break
+
+        stack.append(encode_num(1))
     except (ValueError, SyntaxError):
         return False
     return True
@@ -783,11 +817,20 @@ class OpTest(TestCase):
         z = 0xe71bfa115715d6fd33796948126f40a8cdd39f187e4afb03896795189fe1423c
         sig1 = bytes.fromhex('3045022100dc92655fe37036f47756db8102e0d7d5e28b3beb83a8fef4f5dc0559bddfb94e02205a36d4e4e6c7fcd16658c50783e00c341609977aed3ad00937bf4ee942a8993701')
         sig2 = bytes.fromhex('3045022100da6bee3c93766232079a01639d07fa869598749729ae323eab8eef53577d611b02207bef15429dcadce2121ea07f233115c6f09034c0be68db99980b9a6c5e75402201')
+        # sig3 and sig4 are based on sig 1 and 2, and change one number
+        sig3 = bytes.fromhex('3045022100dc92655fe27036f47756db8102e0d7d5e28b3beb83a8fef4f5dc0559bddfb94e02205a36d4e4e6c7fcd16658c50783e00c341609977aed3ad00937bf4ee942a8993701')
+        sig4 = bytes.fromhex('3045022100da6bee3c92766232079a01639d07fa869598749729ae323eab8eef53577d611b02207bef15429dcadce2121ea07f233115c6f09034c0be68db99980b9a6c5e75402201')
+    
         sec1 = bytes.fromhex('022626e955ea6ea6d98850c994f9107b036b1334f18ca8830bfff1295d21cfdb70')
         sec2 = bytes.fromhex('03b287eaf122eea69030a0e9feed096bed8045c8b98bec453e1ffac7fbdbd4bb71')
-        stack = [b'', sig1, sig2, b'\x02', sec1, sec2, b'\x02']
-        self.assertTrue(op_checkmultisig(stack, z))
-        self.assertEqual(decode_num(stack[0]), 1)
+        sec3 = bytes.fromhex('04887387e452b8eacc4acfde10d9aaf7f6d9a0f975aabb10d006e4da568744d06c61de6d95231cd89026e286df3b6ae4a894a3378e393e93a0f45b666329a0ae34')
+        stack1 = [b'', sig2, sig1, b'\x02', sec1, sec2, sec3, b'\x03']
+        stack2 = [b'', sig2, sig3, b'\x02', sec1, sec2, sec3, b'\x03']
+        stack3 = [b'', sig4, sig3, b'\x02', sec1, sec2, sec3, b'\x03']
+        self.assertTrue(op_checkmultisig(stack1, z))
+        self.assertFalse(op_checkmultisig(stack2, z))
+        self.assertFalse(op_checkmultisig(stack3, z))
+        self.assertEqual(decode_num(stack1[0]), 1)
 
 
 OP_CODE_FUNCTIONS = {

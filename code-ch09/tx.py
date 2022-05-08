@@ -261,7 +261,15 @@ class Tx:
         # grab the first input
         # check that first input prev_tx is b'\x00' * 32 bytes
         # check that first input prev_index is 0xffffffff
-        raise NotImplementedError
+        # raise NotImplementedError
+        if len(self.tx_ins) != 1:
+            return False
+        tx_in = self.tx_ins[0]
+        if tx_in.prev_tx != b'\x00' * 32:
+            return False
+        if tx_in.prev_index != 0xffffffff:
+            return False
+        return True
 
     def coinbase_height(self):
         '''Returns the height of the block this coinbase transaction is in
@@ -270,8 +278,12 @@ class Tx:
         # if this is NOT a coinbase transaction, return None
         # grab the first cmd
         # convert the cmd from little endian to int
-        raise NotImplementedError
-
+        # raise NotImplementedError
+        if not self.is_coinbase():
+            return None
+        cmd = self.tx_ins[0].script_sig.cmds[0]
+        return little_endian_to_int(cmd)
+        
 
 class TxIn:
 
@@ -473,9 +485,13 @@ class TxTest(TestCase):
 
     def test_is_coinbase(self):
         raw_tx = bytes.fromhex('01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff5e03d71b07254d696e656420627920416e74506f6f6c20626a31312f4542312f4144362f43205914293101fabe6d6d678e2c8c34afc36896e7d9402824ed38e856676ee94bfdb0c6c4bcd8b2e5666a0400000000000000c7270000a5e00e00ffffffff01faf20b58000000001976a914338c84849423992471bffb1a54a8d9b1d69dc28a88ac00000000')
+        not_coinbase = bytes.fromhex('010000000199a24308080ab26e6fb65c4eccfadf76749bb5bfa8cb08f291320b3c21e56f0d0d0000006b4830450221008ed46aa2cf12d6d81065bfabe903670165b538f65ee9a3385e6327d80c66d3b502203124f804410527497329ec4715e18558082d489b218677bd029e7fa306a72236012103935581e52c354cd2f484fe8ed83af7a3097005b2f9c60bff71d35bd795f54b67ffffffff02408af701000000001976a914d52ad7ca9b3d096a38e752c2018e6fbc40cdf26f88ac80969800000000001976a914507b27411ccf7f16f10297de6cef3f291623eddf88ac00000000')
         stream = BytesIO(raw_tx)
+        stream2 = BytesIO(not_coinbase)
         tx = Tx.parse(stream)
+        tx2 = Tx.parse(stream2)
         self.assertTrue(tx.is_coinbase())
+        self.assertFalse(tx2.is_coinbase())
 
     def test_coinbase_height(self):
         raw_tx = bytes.fromhex('01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff5e03d71b07254d696e656420627920416e74506f6f6c20626a31312f4542312f4144362f43205914293101fabe6d6d678e2c8c34afc36896e7d9402824ed38e856676ee94bfdb0c6c4bcd8b2e5666a0400000000000000c7270000a5e00e00ffffffff01faf20b58000000001976a914338c84849423992471bffb1a54a8d9b1d69dc28a88ac00000000')

@@ -129,7 +129,11 @@ def bits_to_target(bits):
     # the first three bytes are the coefficient in little endian
     # the formula is:
     # coefficient * 256**(exponent-3)
-    raise NotImplementedError
+    # raise NotImplementedError
+    expo = bits[-1]
+    coef = little_endian_to_int(bits[:-1])
+    target = coef * 256 ** (expo - 3)
+    return target
 
 
 # tag::source1[]
@@ -156,8 +160,18 @@ def calculate_new_bits(previous_bits, time_differential):
     # the new target is the previous target * time differential / two weeks
     # if the new target is bigger than MAX_TARGET, set to MAX_TARGET
     # convert the new target to bits
-    raise NotImplementedError
+    # raise NotImplementedError
+    previous_target = bits_to_target(previous_bits)
 
+    if time_differential > TWO_WEEKS * 4:
+        time_differential = TWO_WEEKS * 4
+    if time_differential < TWO_WEEKS // 4:
+        time_differential = TWO_WEEKS // 4
+
+    new_target = previous_target * time_differential // TWO_WEEKS
+    new_bits = target_to_bits(new_target)
+
+    return new_bits
 
 class HelperTest(TestCase):
 
